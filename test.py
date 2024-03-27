@@ -4,21 +4,21 @@ import subprocess
 import time
 import unittest
 
-class Lab4TestCase(unittest.TestCase):
+class TestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.year = 2021
         subprocess.run(['make'], capture_output=True)
         subprocess.run(['./ext2-create'], capture_output=True)
-        p = subprocess.run(['dumpe2fs', 'cs111-base.img'], capture_output=True, text=True)
+        p = subprocess.run(['dumpe2fs', 'base.img'], capture_output=True, text=True)
         cls.dump_lines = p.stdout.splitlines()
-        p = subprocess.run(['fsck.ext2', '-f', '-n', 'cs111-base.img'], capture_output=True, text=True)
+        p = subprocess.run(['fsck.ext2', '-f', '-n', 'base.img'], capture_output=True, text=True)
         cls.fsck_lines = p.stdout.splitlines()
-        p = subprocess.run(['ls', '-f', '-n', 'cs111-base.img'], capture_output=True, text=True)
+        p = subprocess.run(['ls', '-f', '-n', 'base.img'], capture_output=True, text=True)
         cls.ls_lines = p.stdout.splitlines()
         subprocess.run(['mkdir', 'mnt'], capture_output=True)
-        subprocess.run(['sudo', 'mount', '-o', 'loop', 'cs111-base.img', 'mnt'])
+        subprocess.run(['sudo', 'mount', '-o', 'loop', 'base.img', 'mnt'])
         cls.root_stat = os.lstat('mnt') if os.path.exists('mnt') else None
         cls.hello_world_stat = os.lstat('mnt/hello-world') if os.path.exists('mnt/hello-world') else None
         cls.hello_stat = os.lstat('mnt/hello') if os.path.exists('mnt/hello') else None
