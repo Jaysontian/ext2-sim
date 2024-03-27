@@ -196,7 +196,7 @@ void write_superblock(int fd) {
 
 	struct ext2_superblock superblock = {0};
 
-	// TODO: It's all yours
+	// TODO It's all yours
 	// TODO finish the superblock number setting
 	superblock.s_inodes_count = NUM_INODES;
 	superblock.s_blocks_count = NUM_BLOCKS;
@@ -214,8 +214,8 @@ void write_superblock(int fd) {
 	superblock.s_mnt_count         = 0; /* Number of times mounted so far */
 	superblock.s_max_mnt_count     = -1; /* Make this unlimited */
 	superblock.s_magic = EXT2_SUPER_MAGIC; /* ext2 Signature */
-	superblock.s_state             = 0; /* File system is clean */
-	superblock.s_errors            = 0; /* Ignore the error (continue on) */
+	superblock.s_state             = 1; /* File system is clean */
+	superblock.s_errors            = 1; /* Ignore the error (continue on) */
 	superblock.s_minor_rev_level   = 0; /* Leave this as 0 */
 	superblock.s_lastcheck = current_time; /* Last check time */
 	superblock.s_checkinterval     = 1; /* Force checks by making them every 1 second */
@@ -274,6 +274,7 @@ void write_block_group_descriptor_table(int fd) {
 	}
 }
 
+
 void write_block_bitmap(int fd)
 {
 	off_t off = lseek(fd, BLOCK_OFFSET(BLOCK_BITMAP_BLOCKNO), SEEK_SET);
@@ -282,14 +283,22 @@ void write_block_bitmap(int fd)
 		errno_exit("lseek");
 	}
 
-	// TODO It's all yours
-	u8 map_value[BLOCK_SIZE];
+	u8 map_value[BLOCK_SIZE]; // Total AVAILABLE should be 
 
-	if (write(fd, map_value, BLOCK_SIZE) != BLOCK_SIZE)
-	{
-		prinf("ISSUE with writing");
+	map_value[0] = 0b11111111; // page 1
+	map_value[1] = 0b11111111;
+	map_value[2] = 0b01111111;
+	for(int i = 3; i <= 126; i++){ // up to page 127
+		map_value[i] = 0b00000000;
+	}
+	map_value[127] = 0b10000000;
+	for (int j = 128; j < 1024; j++) {
+		map_value[j] = 0b11111111;
+	}
+	if (write(fd, map_value, BLOCK_SIZE) != BLOCK_SIZE) {
 		errno_exit("write");
 	}
+
 }
 
 void write_inode_bitmap(int fd)
@@ -300,8 +309,16 @@ void write_inode_bitmap(int fd)
 		errno_exit("lseek");
 	}
 
-	// TODO It's all yours
 	u8 map_value[BLOCK_SIZE];
+
+	map_value[0] = 0b11111111;
+	map_value[1] = 0b00011111;
+	for (int a = 2; a < 16; a++){
+		map_value[a] = 0b00000000;
+	}
+	for (int b = 16; b < 1024; b++){
+		map_value[b] = 0b11111111;
+	}
 
 	if (write(fd, map_value, BLOCK_SIZE) != BLOCK_SIZE)
 	{
@@ -347,16 +364,118 @@ void write_inode_table(int fd) {
 	lost_and_found_inode.i_block[0] = LOST_AND_FOUND_DIR_BLOCKNO;
 	write_inode(fd, LOST_AND_FOUND_INO, &lost_and_found_inode);
 
-	// TODO It's all yours
-	// TODO finish the inode entries for the other files
+	// Root Directory Inode:
+	struct ext2_inode root_dir_inode = {0};
+	root_dir_inode.i_mode = EXT2_S_IFDIR
+	                              | EXT2_S_IRUSR
+	                              | EXT2_S_IWUSR
+	                              | EXT2_S_IXUSR
+	                              | EXT2_S_IRGRP
+	                              | EXT2_S_IXGRP
+	                              | EXT2_S_IROTH
+	                              | EXT2_S_IXOTH;
+	root_dir_inode.i_uid = 0;
+	root_dir_inode.i_size = 1024;
+	root_dir_inode.i_atime = current_time;
+	root_dir_inode.i_ctime = current_time;
+	root_dir_inode.i_mtime = current_time;
+	root_dir_inode.i_dtime = 0;
+	root_dir_inode.i_gid = 0;
+	root_dir_inode.i_links_count = 3; // Link count is 3: (., .., lost_found/..)
+	root_dir_inode.i_blocks = 2;
+	root_dir_inode.i_block[0] = ROOT_DIR_BLOCKNO;
+	write_inode(fd, EXT2_ROOT_INO, &root_dir_inode);
+
+	// Hello World File
+	struct ext2_inode h_world_inode = {0};
+	h_world_inode.i_mode = EXT2_S_IFREG
+	                              | EXT2_S_IRUSR
+	                              | EXT2_S_IWUSR
+	                              | EXT2_S_IRGRP
+	                              | EXT2_S_IROTH;
+	h_world_inode.i_uid = 1000;
+	h_world_inode.i_size = 12;
+	h_world_inode.i_atime = current_time;
+	h_world_inode.i_ctime = current_time;
+	h_world_inode.i_mtime = current_time;
+	h_world_inode.i_dtime = 0;
+	h_world_inode.i_gid = 1000;
+	h_world_inode.i_links_count = 1; // Link count is 1
+	h_world_inode.i_blocks = 2;
+	h_world_inode.i_block[0] = HELLO_WORLD_FILE_BLOCKNO;
+	write_inode(fd, HELLO_WORLD_INO, &h_world_inode);
+
+	// Hello File (Link)
+	struct ext2_inode hello_inode = {0};
+	hello_inode.i_mode = EXT2_S_IFLNK
+	                              | EXT2_S_IRUSR
+	                              | EXT2_S_IWUSR
+	                              | EXT2_S_IRGRP
+	                              | EXT2_S_IROTH;
+	hello_inode.i_uid = 1000;
+	hello_inode.i_size = 11;
+	hello_inode.i_atime = current_time;
+	hello_inode.i_ctime = current_time;
+	hello_inode.i_mtime = current_time;
+	hello_inode.i_dtime = 0;
+	hello_inode.i_gid = 1000;
+	hello_inode.i_links_count = 1; // Link count is 1 (parent)
+	hello_inode.i_blocks = 0;
+
+	const char *s = "hello-world";
+	size_t len = strlen(s);
+	memcpy(hello_inode.i_block, s, len); // copy into i_block
+
+	write_inode(fd, HELLO_INO, &hello_inode);
 }
 
 void write_root_dir_block(int fd)
 {
-	// TODO It's all yours
+	// Create a block offset similar to write_lost_and_found_dir_block
+	off_t off = BLOCK_OFFSET(ROOT_DIR_BLOCKNO);
+	off = lseek(fd, off, SEEK_SET);
+	if (off == -1) errno_exit("lseek");
 
-	// just copy the below implementation for a directory block
+	// Current Reference (.)
+	ssize_t bytes_remaining = BLOCK_SIZE;
 
+	struct ext2_dir_entry current_entry = {0};
+	dir_entry_set(current_entry, EXT2_ROOT_INO, ".");
+	dir_entry_write(current_entry, fd);
+
+	bytes_remaining -= current_entry.rec_len;
+
+	// Parent Reference (..)
+
+	struct ext2_dir_entry parent_entry = {0};
+	dir_entry_set(parent_entry, EXT2_ROOT_INO, "..");
+	dir_entry_write(parent_entry, fd);
+
+	bytes_remaining -= parent_entry.rec_len;
+
+	// Lost and Found Directory
+
+	struct ext2_dir_entry lost_and_found = {0};
+	dir_entry_set(lost_and_found, LOST_AND_FOUND_INO, "lost+found");
+	dir_entry_write(lost_and_found, fd);
+	bytes_remaining -= lost_and_found.rec_len;
+
+	// Hello World File
+	struct ext2_dir_entry hello_world = {0};
+	dir_entry_set(hello_world, HELLO_WORLD_INO, "hello-world");
+	dir_entry_write(hello_world, fd);
+	bytes_remaining -= hello_world.rec_len;
+
+	// Hello Link
+	struct ext2_dir_entry hello_link = {0};
+	dir_entry_set(hello_link, HELLO_INO, "hello");
+	dir_entry_write(hello_link, fd);
+	bytes_remaining -= hello_link.rec_len;
+
+	// Filling in remaining bytes
+	struct ext2_dir_entry fill_entry = {0};
+	fill_entry.rec_len = bytes_remaining;
+	dir_entry_write(fill_entry, fd);
 }
 
 void write_lost_and_found_dir_block(int fd) {
@@ -365,29 +484,44 @@ void write_lost_and_found_dir_block(int fd) {
 	if (off == -1) {
 		errno_exit("lseek");
 	}
-
 	ssize_t bytes_remaining = BLOCK_SIZE;
 
-	struct ext2_dir_entry current_entry = {0}; 				// zero everything out
-	dir_entry_set(current_entry, LOST_AND_FOUND_INO, "."); 	// given function; set dir entry to map to itself with "."
-	dir_entry_write(current_entry, fd);						// given; write dir entry (mapping between filename and inode)
+	// Self
+	struct ext2_dir_entry current_entry = {0};
+	dir_entry_set(current_entry, LOST_AND_FOUND_INO, ".");
+	dir_entry_write(current_entry, fd);
 
 	bytes_remaining -= current_entry.rec_len;
 
+	// Parent
 	struct ext2_dir_entry parent_entry = {0};
-	dir_entry_set(parent_entry, EXT2_ROOT_INO, "..");		// create entry back to root directory
+	dir_entry_set(parent_entry, EXT2_ROOT_INO, "..");
 	dir_entry_write(parent_entry, fd);
 
 	bytes_remaining -= parent_entry.rec_len;
 
-	struct ext2_dir_entry fill_entry = {0}; // entry with everything zeroed out
-	fill_entry.rec_len = bytes_remaining; 	// write to end of the block to show this space isn't filled
-	dir_entry_write(fill_entry, fd);		
+	struct ext2_dir_entry fill_entry = {0};
+	fill_entry.rec_len = bytes_remaining;
+	dir_entry_write(fill_entry, fd);
 }
 
 void write_hello_world_file_block(int fd)
 {
-	// TODO It's all yours
+	// create byte offset
+	off_t offset = BLOCK_OFFSET(HELLO_WORLD_FILE_BLOCKNO);
+	offset = lseek(fd, offset, SEEK_SET);
+	if (offset == -1) {
+		errno_exit("lseek");
+	}
+
+	// create buffer with string hello world and then load it into data blocks
+	char* buffer = "Hello world\n";
+
+	int res = write(fd, buffer, strlen(buffer));
+	
+	if (res != strlen(buffer)){
+		errno_exit("WRITE failed");
+	}
 }
 
 int main(int argc, char *argv[]) {
